@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.research/
+data/
+runtime/
+dist/
+*.egg-info/
+.env
+*.log
+.ipynb_checkpoints/
+*.gguf
+*.safetensors
