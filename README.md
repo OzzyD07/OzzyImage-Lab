@@ -71,6 +71,29 @@ Colab GPU erişimi aboneliğe ve anlık kullanılabilirliğe bağlıdır; notebo
 Drive'da modeller ve ilk çıktılar için en az **30 GB boş alan** ayırın; galeri büyüdükçe artırın.
 Derleme yerel `/content` diskinde yapılır. Offload sistem RAM'ini kullanır ve üretimi yavaşlatabilir.
 
+### Canlı kurulum çıktısı ve motor önbelleği
+
+Notebook 4. hücre stdout/stderr çıktısını canlı aktarır ve `/content/ozzy-runtime/setup.log`
+dosyasına yazar. Dosya sırası, indirme/önbellek aşaması, SHA256 yüzdesi ve derleme çıktısı gösterilir.
+15 saniye yeni çıktı yoksa geçen süre yazılır; bu mesaj indirmede ilerleme olduğu anlamına gelmez.
+
+`ENGINE_MODE=auto` varsayılandır. İlk derlemeden sonra motor `Drive/MyDrive/OzzyImage-Lab/engine-cache/`
+altına SHA256 kayıtlarıyla kaydedilir. Sonraki uyumlu oturumlarda `/content` içine kopyalanıp
+gerekli CLI seçenekleri ve CUDA aygıtının görünürlüğü kontrol edilir; başarılıysa derleme atlanır.
+Motor commit'i, CUDA toolkit, CPU mimarisi veya glibc değişirse farklı önbellek kullanılır.
+Eksik, bozuk veya çalışmayan önbellekte kaynaktan derlemeye dönülür. `ENGINE_MODE=build`
+önbellekten yüklemeyi atlar ve CMake derlemesini çalıştırır; mevcut yerel build artımlı kullanılabilir.
+
+Bu, önceden yerelde derlenmiş motoru yeniden kullanma yöntemidir. Kontrol edilen resmi
+[motor yayınında](https://github.com/leejet/stable-diffusion.cpp/releases/tag/master-1000-95ff762)
+Linux CUDA paketi bulunmadığı için ilk kurulumda hazır Windows CUDA paketi indirilmez.
+CUDA toolkit'i sıfırdan derlenmez; Colab'daki toolkit ile yalnızca `sd-cli` motoru derlenir.
+
+Mevcut Colab oturumunu güncellerken çalışan kurulum hücresini durdurun. Yeni
+`scripts/setup_colab.py`, `scripts/engine_cache.py` ve notebook dosyalarını kendi GitHub
+deponuza yükleyip notebook'un güncelleme hücresiyle kaynakları alın. Sonra 4. hücreyi çalıştırın.
+Yalnızca hücreyi değiştirmek eski kurulum script'ine `--engine-mode` desteği eklemez.
+
 Motor her varyasyonda ayrı süreçte çalışır; iptal ve GPU belleğini geri verme basittir, ancak model tekrar yüklenir.
 Bu nedenle sıcak model sunucusuna göre ardışık üretim gecikmesi yüksektir. İlk sürüm dayanıklı tek kullanıcı akışını önceler.
 Drive doğrudan model okuması da yerel SSD'den yavaş olabilir.
