@@ -108,24 +108,19 @@ def test_mcp_transport_and_tools(client):
     assert response.status_code == 200
     response=client.post('/mcp/',headers=headers,json={'jsonrpc':'2.0','id':2,'method':'tools/list','params':{}})
     names={tool['name'] for tool in response.json()['result']['tools']}
-    assert {'generate_image','upload_image','get_image','cancel_job','get_recipe','save_preset'} <= names
+    assert {'generate_image','upload_image','get_image','cancel_job','get_recipe','get_workflow','save_preset'} <= names
     response=client.post('/mcp/',headers=headers,json={'jsonrpc':'2.0','id':3,'method':'tools/call','params':{'name':'generate_image','arguments':{'settings':{'prompt':'MCP cup','width':256,'height':256}}}})
     result=response.json()['result']
     assert not result.get('isError',False)
 
 
-def test_engine_command_keeps_prompts_as_arguments(tmp_path):
-    import json
-    config={k:str(tmp_path/k) for k in ['binary','denoiser','vae','encoder','vision']}
-    for path in config.values():
-        from pathlib import Path
-        Path(path).touch()
-    path=tmp_path/'config.json';path.write_text(json.dumps(config))
-    engine=Engine(path)
+def test_workflow_keeps_prompt_as_data():
+    from ozzy.engine import workflow
     request=Generation(prompt='$(touch hacked); --help')
-    command=engine.command(request,Store(tmp_path/'data'),tmp_path/'out.png',42,tmp_path)
-    assert command[command.index('-p')+1] == request.prompt
-    assert '--llm_vision' in command and '--model-args' in command
+    graph=workflow(request,42,[],'ozzy/test')
+    assert graph['4']['inputs']['prompt']==request.prompt
+    assert graph['6']['inputs']['device']=='gpu'
+    assert graph['7']['inputs']['cfg']==1
 
 
 def test_notebook_is_clean_and_valid():
@@ -155,3 +150,18 @@ def test_restart_marks_incomplete_jobs_interrupted(tmp_path):
 def test_invalid_upload_is_rejected(client):
     auth(client)
     assert client.post('/api/assets',content=b'not an image').status_code==400
+
+
+def test_workflow_export_and_demo_absence(client):
+    auth(client)
+    from ozzy.storage import atomic_json
+    store=client.app.state.studio.store
+    output_id, job_id='b'*32,'c'*32
+    atomic_json(store.path('outputs',output_id,'.json'),{'job_id':job_id})
+    assert client.get(f'/api/outputs/{output_id}/workflow').status_code==400
+    folder=store.root/'jobs'/job_id
+    folder.mkdir()
+    atomic_json(folder/f'workflow-{output_id}.json',{'1':{'class_type':'UNETLoader','inputs':{}}})
+    assert client.get(f'/api/outputs/{output_id}/workflow').json()['1']['class_type']=='UNETLoader'
+    client.headers.pop('Authorization')
+    assert client.get(f'/api/outputs/{output_id}/workflow').status_code==401

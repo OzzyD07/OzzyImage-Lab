@@ -10,16 +10,16 @@ class Generation(BaseModel):
     negative_prompt: str = Field(default="", max_length=6000)
     width: int = Field(default=1024, ge=256, le=4096, multiple_of=32)
     height: int = Field(default=1024, ge=256, le=4096, multiple_of=32)
-    steps: int = Field(default=20, ge=1, le=100)
-    cfg: float = Field(default=6.0, ge=1, le=20)
+    steps: int = Field(default=40, ge=1, le=100)
+    cfg: float = Field(default=1.0, ge=1, le=20)
     seed: int = Field(default=-1, ge=-1, le=2147483647)
     count: int = Field(default=1, ge=1, le=8)
     references: list[str] = Field(default_factory=list, max_length=10)
     mask: str | None = None
     mask_blur: int = Field(default=8, ge=0, le=64)
     preserve_unmasked: bool = True
-    offload: bool = True
-    vae_tiling: bool = True
+    offload: Literal[False] = False
+    vae_tiling: bool = False
     prefix_cache: bool = True
 
     @model_validator(mode="after")

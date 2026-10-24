@@ -15,13 +15,13 @@ def code(text):
 
 md("""
 # OzzyImage Lab
-### Qwen-Image-2.1 Q8 · Drive · Web Studio · MCP
-Hücreleri sırayla çalıştırın. **Runtime → Change runtime type → A100** seçin.
-Model ağırlıkları, referanslar, maskeler ve çıktılar Drive'da; derleme ve kod `/content` içinde kalır.
+### Qwen-Image-2.1 BF16 · ComfyUI · 80 GB GPU-only · Drive · MCP
+Hücreleri sırayla çalıştırın. **80 GB sınıfı NVIDIA GPU** seçin. Colab yalnızca 40 GB GPU tahsis ederse bu notebook devam etmez; 80 GB erişimi garanti değildir.
+Model ağırlıkları, referanslar, maskeler ve çıktılar Drive'da; ComfyUI ve Python ortamı `/content` içinde kalır.
 
-- Model: Q8_0 denoiser + Qwen3-VL Q8_0 encoder + vision projector + BF16 VAE.
-- Başlangıç: 1024×1024, 20 adım, CFG 6, Euler, tek görüntü, CPU offload ve VAE tiling.
-- 40 GB başlangıç profilidir; 2K/çoklu referans bellek kullanımı gerçek çalışmada ölçülmelidir.
+- Model: Qwen-Image-2.1 BF16 + Qwen3-VL BF16 + BF16 VAE. Comfy-Org tarafından ComfyUI için yeniden paketlenmiş özgün model; GGUF/INT8/FP8 yok.
+- Başlangıç: 1024×1024, 40 adım, CFG 1, Euler/simple, tek görüntü. CPU offload kapalı; prefix cache GPU üzerinde.
+- 2K presetler kullanılabilir; 80 GB bile sınırsız değildir. Bellek dolarsa açık hata verilir; CPU veya quantize ağırlıklara geçilmez. Drive’da en az 40 GB boş alan ayırın; eski GGUF dosyaları silinmez.
 - Bu notebook çalışma süresini uzatmak için Colab kısıtlarını aşmaz; oturum kapanınca ngrok da kapanır.
 - Kod lisansı MIT; model ağırlıkları ayrı **Qwen Research** lisansına tabidir.
 
@@ -34,10 +34,8 @@ from google.colab import drive, userdata
 from pathlib import Path
 import os, sys, subprocess, json, time, re
 drive.mount('/content/drive')
-REPO_URL = "https://github.com/YOUR_USERNAME/OzzyImage-Lab.git" # @param {type:"string"}
+REPO_URL = "https://github.com/OzzyD07/OzzyImage-Lab.git" # @param {type:"string"}
 REVISION = "main" # @param {type:"string"}
-PROFILE = "a100-40" # @param ["a100-40", "a100-80"]
-ENCODER = "Q8_0" # @param ["Q8_0", "UD-Q4_K_XL"]
 DATA = Path('/content/drive/MyDrive/OzzyImage-Lab')
 REPO = Path('/content/OzzyImage-Lab')
 RUNTIME = Path('/content/ozzy-runtime')
@@ -73,19 +71,17 @@ else:
 print('Kaynak sürümü:', subprocess.check_output(['git','-C',str(REPO),'rev-parse','HEAD'], text=True).strip())
 ''')
 code('''
-# @title 3 · Python ve derleme bağımlılıkları
+# @title 3 · Stüdyo bağımlılıkları
 run('apt-get', 'update', '-qq')
-run('apt-get', 'install', '-y', '-qq', 'build-essential', 'cmake', 'git', 'pkg-config')
+run('apt-get', 'install', '-y', '-qq', 'git', 'python3-venv')
 run(sys.executable, '-m', 'pip', 'install', '-q', '-e', str(REPO)+'[test]')
 run(sys.executable, '-m', 'pytest', '-q', cwd=REPO)
 ''')
 code('''
-# @title 4 · Q8 indir / CUDA motorunu hazırla — canlı günlük
+# @title 4 · BF16 modelleri indir / ComfyUI kur — canlı günlük
 import queue, threading, signal
 VERIFY_WEIGHTS = False # @param {type:"boolean"}
-ENGINE_MODE = 'auto' # @param ["auto", "build"]
-args = [sys.executable, '-u', REPO/'scripts/setup_colab.py', '--data', DATA, '--runtime', RUNTIME,
-        '--profile', PROFILE, '--encoder', ENCODER, '--engine-mode', ENGINE_MODE]
+args = [sys.executable, '-u', REPO/'scripts/setup_colab.py', '--data', DATA, '--runtime', RUNTIME]
 if VERIFY_WEIGHTS:
     args.append('--verify')
 RUNTIME.mkdir(parents=True, exist_ok=True)
@@ -93,7 +89,7 @@ setup_log = RUNTIME / 'setup.log'
 setup_env = dict(os.environ, PYTHONUNBUFFERED='1', HF_HUB_DISABLE_PROGRESS_BARS='0',
                  HF_HUB_VERBOSITY='info', TQDM_MININTERVAL='2')
 print('Kurulum başlıyor. Canlı çıktı aşağıda; günlük:', setup_log, flush=True)
-print('Motor modu:', ENGINE_MODE, '· auto: uyumlu Drive önbelleğini kullan, yoksa derle.', flush=True)
+print('ComfyUI · BF16 · 80 GB GPU-only · CPU offload kapalı · C++ derlemesi yok', flush=True)
 print('Sessiz aşamalarda 15 saniyede bir geçen süre gösterilir; bu mesaj ilerleme garantisi değildir.', flush=True)
 started = time.monotonic()
 process = subprocess.Popen(list(map(str, args)), stdout=subprocess.PIPE,
@@ -138,13 +134,20 @@ except BaseException:
 finally:
     reader.join(timeout=2)
     process.stdout.close()
-print('Tamamlandı. Model revision ve SHA256 kayıtları Drive/model-lock.json içinde.', flush=True)
+print('Tamamlandı. Model revision ve SHA256 kayıtları Drive/model-lock-bf16.json içinde.', flush=True)
+''')
+code('''
+# @title 4B · ComfyUI motorunu başlat ve düğümleri doğrula
+from ozzy.comfy_runtime import start_comfy, stop_process
+if 'comfy_process' in globals() and comfy_process.poll() is None:
+    raise RuntimeError('ComfyUI zaten çalışıyor. Önce durdurma hücresini çalıştırın.')
+comfy_process, comfy_log = start_comfy(RUNTIME/'config.json')
 ''')
 md("""
 ### 5 · Gerçek GPU kabul testi (ilk kurulumda önerilir)
 Beş gerçek üretim çalıştırır; süre ve GPU kullanımı gerektirir. Üretim, referans, maske,
 şeffaflık ve ayıklama yollarını sınar. Özellikle RGBA çıktıyı görsel olarak da inceleyin.
-GPU testi bu proje hazırlanırken çalıştırılmamıştır; yerel testler motoru taklit ederek uygulama akışını sınar.
+80 GB BF16 GPU testi bu proje hazırlanırken çalıştırılmamıştır; yerel testler motoru taklit ederek uygulama akışını sınar.
 """)
 code('''
 RUN_GPU_ACCEPTANCE = False # @param {type:"boolean"}
@@ -157,6 +160,7 @@ code('''
 # @title 6 · Web arayüzü ve MCP sunucusunu aç
 from pyngrok import ngrok
 import requests
+assert 'comfy_process' in globals() and comfy_process.poll() is None, 'Önce 4B hücresini çalıştırın.'
 if 'server' in globals() and server.poll() is None:
     raise RuntimeError('Sunucu zaten çalışıyor. Önce durdurma hücresini çalıştırın.')
 ngrok.set_auth_token(secret('NGROK_AUTHTOKEN'))
@@ -206,7 +210,9 @@ if 'server_log' in globals():
     server_log.close()
 if 'public_url' in globals():
     ngrok.disconnect(public_url)
-print('Sunucu kapandı. Drive dosyaları korunuyor.')
+if 'comfy_process' in globals():
+    stop_process(comfy_process, comfy_log)
+print('Stüdyo ve ComfyUI kapandı. Drive dosyaları korunuyor.')
 ''')
 md("""
 ### Sürüm kontrol noktası
@@ -215,13 +221,14 @@ Drive'da Git bundle olarak saklar ve seçili revision'a geçer. Yerel değişikl
 `rollback` için `checkpoints/` içindeki bundle dosyasının 40 karakterli SHA adını kullanın.
 Model/çıktılar güncelleme sırasında değiştirilmez. Bu **kaynak kodu checkpoint'idir**;
 yarım kalan diffusion adımları devam ettirilmez. Eski iş kayıtları `interrupted` olur.
-Güncelleme/geri dönüşten sonra 3, 4 ve 6. hücreleri yeniden çalıştırın.
+Güncelleme/geri dönüşten sonra 3, 4, 4B ve 6. hücreleri yeniden çalıştırın. Eski sd-cli kurulumundan geçiyorsanız 4. hücre zorunludur.
 """)
 code('''
 # @title 8 · Güncelleme / geri dönüş (isteğe bağlı)
 ACTION = 'check' # @param ["check", "update", "rollback"]
 TARGET_REVISION = 'main' # @param {type:"string"}
 assert 'server' not in globals() or server.poll() is not None, 'Önce sunucuyu durdurun.'
+assert 'comfy_process' not in globals() or comfy_process.poll() is not None, 'Önce ComfyUI motorunu durdurun.'
 run(sys.executable, REPO/'scripts/checkpoint.py', ACTION, '--repo', REPO, '--data', DATA, '--revision', TARGET_REVISION)
 ''')
 notebook = {"nbformat": 4, "nbformat_minor": 5, "metadata": {"colab": {"name": "OzzyImage_Lab.ipynb", "provenance": []},

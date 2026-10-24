@@ -1,6 +1,7 @@
 """Run actual GPU acceptance checks after the Colab setup cell."""
 import argparse
 import time
+import subprocess
 
 from PIL import Image
 
@@ -45,7 +46,8 @@ def main():
             if mode == "mask":
                 with Image.open(path) as result, Image.open(studio.store.path("assets", reference["id"])) as source:
                     assert result.convert("RGBA").getpixel((10, 10)) == source.convert("RGBA").getpixel((10, 10))
-            print(mode, "PASS", item["id"])
+            print(mode, "PASS", item["id"], flush=True)
+            subprocess.run(["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader"], check=True)
     finally:
         studio.close()
 

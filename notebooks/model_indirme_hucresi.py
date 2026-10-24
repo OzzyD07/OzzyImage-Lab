@@ -1,9 +1,7 @@
-# @title 4 · Q8 indir / CUDA motorunu hazırla — canlı günlük
+# @title 4 · BF16 modelleri indir / ComfyUI kur — canlı günlük
 import queue, threading, signal
 VERIFY_WEIGHTS = False # @param {type:"boolean"}
-ENGINE_MODE = 'auto' # @param ["auto", "build"]
-args = [sys.executable, '-u', REPO/'scripts/setup_colab.py', '--data', DATA, '--runtime', RUNTIME,
-        '--profile', PROFILE, '--encoder', ENCODER, '--engine-mode', ENGINE_MODE]
+args = [sys.executable, '-u', REPO/'scripts/setup_colab.py', '--data', DATA, '--runtime', RUNTIME]
 if VERIFY_WEIGHTS:
     args.append('--verify')
 RUNTIME.mkdir(parents=True, exist_ok=True)
@@ -11,7 +9,7 @@ setup_log = RUNTIME / 'setup.log'
 setup_env = dict(os.environ, PYTHONUNBUFFERED='1', HF_HUB_DISABLE_PROGRESS_BARS='0',
                  HF_HUB_VERBOSITY='info', TQDM_MININTERVAL='2')
 print('Kurulum başlıyor. Canlı çıktı aşağıda; günlük:', setup_log, flush=True)
-print('Motor modu:', ENGINE_MODE, '· auto: uyumlu Drive önbelleğini kullan, yoksa derle.', flush=True)
+print('ComfyUI · BF16 · 80 GB GPU-only · CPU offload kapalı · C++ derlemesi yok', flush=True)
 print('Sessiz aşamalarda 15 saniyede bir geçen süre gösterilir; bu mesaj ilerleme garantisi değildir.', flush=True)
 started = time.monotonic()
 process = subprocess.Popen(list(map(str, args)), stdout=subprocess.PIPE,
@@ -56,4 +54,4 @@ except BaseException:
 finally:
     reader.join(timeout=2)
     process.stdout.close()
-print('Tamamlandı. Model revision ve SHA256 kayıtları Drive/model-lock.json içinde.', flush=True)
+print('Tamamlandı. Model revision ve SHA256 kayıtları Drive/model-lock-bf16.json içinde.', flush=True)

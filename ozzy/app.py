@@ -77,6 +77,17 @@ def create_app(root=None, engine=None, token=None):
         return studio.store.upload(studio.store.path("outputs", image_id).read_bytes())
 
     @mcp.tool()
+    def get_workflow(image_id: str) -> dict:
+        """Read the exact ComfyUI API workflow used for an output. Demo and legacy outputs have no workflow."""
+        import json
+        metadata = studio.store.read('outputs', image_id)
+        studio.store.path('jobs', metadata['job_id'], '.json')
+        path = studio.store.root / 'jobs' / metadata['job_id'] / f'workflow-{image_id}.json'
+        if not path.is_file():
+            raise ValueError('Bu çıktı için ComfyUI workflow kaydı yok (demo veya eski motor).')
+        return json.loads(path.read_text(encoding='utf-8'))
+
+    @mcp.tool()
     def save_preset(name: str, settings: Generation) -> dict:
         """Save a named generation recipe to Drive."""
         return studio.save_preset(name, settings.model_dump())
@@ -183,6 +194,10 @@ def create_app(root=None, engine=None, token=None):
     @app.post("/api/outputs/{ident}/reuse")
     def reuse(ident: str):
         return reuse_output(ident)
+
+    @app.get('/api/outputs/{ident}/workflow')
+    def output_workflow(ident: str):
+        return get_workflow(ident)
 
     @app.post("/api/jobs", status_code=202)
     def submit(body: Generation):

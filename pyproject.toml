@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ozzyimage-lab"
-version = "0.1.0"
+version = "0.2.0"
 description = "A private Qwen Image studio for Colab, Drive and MCP"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.124.4", "uvicorn==0.33.0", "pydantic==2.12.5",
   "pillow>=11.3,<13", "python-multipart==0.0.26", "mcp==1.26.0",
-  "huggingface-hub>=0.34,<2", "pyngrok>=7.2,<8", "httpx==0.28.1"
+  "huggingface-hub>=0.34,<2", "pyngrok>=7.2,<8", "httpx==0.28.1", "pyyaml>=6,<7"
 ]
 
 [project.optional-dependencies]
